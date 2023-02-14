@@ -6,7 +6,6 @@ import re
 
 from Pokemon.exceptions.NoHttpResponseException import NoHttpResponseException
 from models.ShowdownLadderData import ShowdownLadderData
-from models.ShowdownPlayerData import ShowdownPlayerData
 from models.teams import Teams
 from models.users import Users
 from datetime import datetime
@@ -21,13 +20,13 @@ class ShowdownDataScraper:
     num_teams_to_include = 100
 
     def __init__(self):
-        logging.basicConfig(level=logging.DEBUG, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
 
     # Ultimate goal is to construct Team and Usage MongoDB entities for a specific date and save to the database
     def scrape_showdown_for_top_teams(self):
         logging.info("Beginning data scraping.")
         #First check if data has already been scraped and saved today, and if so exit script
-        # self.exit_script_if_already_run_today()
+        self.exit_script_if_already_run_today()
 
         # Instantiate Team entity
         # Team entities include data from ladder url (rank, username, rating) and replays url (upload time, id for actual replay, team)
@@ -52,14 +51,13 @@ class ShowdownDataScraper:
 
             # Use showdown ladder data objects to fetch recent replays and add that info to DB entities IF they have recent games
             recent_match_data = self.get_recent_match_data(userid)
-
+            logging.debug(f"Number of recent matches: {len(recent_match_data)}")
             # If no recent matches, go to next user
             if len(recent_match_data) == 0:
-                logging.debug("No recent matches were found.")
+                logging.debug(f"No recent matches were found for {userid}.")
                 showdown_rank_count += 1
                 continue
 
-            logging.debug(f"Number of recent matches: {len(recent_match_data)}")
             # Instantiate additional fields for User object from recent_match_data
             upload_date = time.strftime('%Y-%m-%d', time.localtime(recent_match_data[0]["uploadtime"]))
             recent_match_id = recent_match_data[0]["id"]
@@ -69,7 +67,7 @@ class ShowdownDataScraper:
 
             user = Users(rank=showdown_rank_count, website_rank=website_rank_count, username=userid, team=team, replay_url=replay_url, rating=int(showdown_player_data.elo), upload_date=upload_date)
             logging.info(f"Team found, User object created and added to Teams list: {vars(user)}")
-            team_entity.users.append(user.__dict__)
+            team_entity.users.append(vars(user))
             showdown_rank_count += 1
             website_rank_count += 1
             time.sleep(1)
@@ -102,6 +100,7 @@ class ShowdownDataScraper:
         mongodb_teams_collection.insert_one(vars(team_entity))
 
     def get_ladder_data(self) -> ShowdownLadderData:
+        # Fetches a list of the top 500 players on the Pokemon Showdown ladder for the configured competitive format.
         try:
             logging.info(f"Fetching ladder for {self.format}.")
             ladder_response = requests.get(self.ladder_base_url + self.format + ".json").json()
@@ -116,23 +115,25 @@ class ShowdownDataScraper:
         try:
             replay_data = requests.get(replay_url + ".json").json()
             if replay_data is None:
-                raise NoHttpResponseException("No response was received from Showdown's recent replays url.")
+                raise NoHttpResponseException("No response was received from Showdown's specific replay url.")
             return replay_data
         except:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
             self.get_replay_data(replay_url)
 
     def get_recent_match_data(self, userid):
+        # Fetches all recent Pokemon Showdown match replays (of only the configured format) for a given user
         try:
             recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + self.format).json()
             if recent_matches is None:
-                raise NoHttpResponseException("No response was received from recent Showdown's match data url.")
+                raise NoHttpResponseException("No response was received from Showdown's recent replays url.")
             return recent_matches
         except:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
             self.get_recent_match_data(userid)
 
     def is_datetime_todays_date(self, input_datetime: datetime) -> bool:
+        # Returns True if input datetime has today's Year-Month-Day
         same_year = input_datetime.year == datetime.today().year
         same_month = input_datetime.month == datetime.today().month
         same_day = input_datetime.day == datetime.today().day
