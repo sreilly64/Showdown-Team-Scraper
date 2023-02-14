@@ -4,10 +4,13 @@ from .ShowdownPlayerData import ShowdownPlayerData
 
 class ShowdownLadderData:
 
-    def __init__(self, formatid: str = None, format: str = None, toplist: List[ShowdownPlayerData] = None):
+    def __init__(self, formatid: str, format: str, toplist: List[dict]):
         self.formatid = formatid
         self.format = format
-        self.toplist = toplist
+        temp_list = []
+        for player_data in toplist:
+            temp_list.append(ShowdownPlayerData(**player_data))
+        self.toplist = temp_list
 
     @property
     def formatid_field(self):
