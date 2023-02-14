@@ -6,9 +6,9 @@ from datetime import datetime
 
 class Teams:
 
-    def __init__(self, init_date: datetime = None, init_format: str = None):
-        self.date = init_date
-        self.format = init_format
+    def __init__(self, date: datetime = None, format: str = None):
+        self.date = date
+        self.format = format
         self.users = []
         self.usage = []
 

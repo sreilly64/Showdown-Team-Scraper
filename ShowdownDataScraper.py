@@ -30,7 +30,7 @@ class ShowdownDataScraper:
 
         # Instantiate Team entity
         # Team entities include data from ladder url (rank, username, rating) and replays url (upload time, id for actual replay, team)
-        team_entity = Teams(init_date=datetime.today(), init_format=self.format)
+        team_entity = Teams(date=datetime.today(), format=self.format)
         logging.info(f"Current date is: {team_entity.date}")
         logging.info(f"Current format is: {team_entity.format}")
 
@@ -61,9 +61,8 @@ class ShowdownDataScraper:
             # Instantiate additional fields for User object from recent_match_data
             upload_date = time.strftime('%Y-%m-%d', time.localtime(recent_match_data[0]["uploadtime"]))
             recent_match_id = recent_match_data[0]["id"]
+            team = self.get_team_list(recent_match_id, userid)
             replay_url = self.replays_base_url + recent_match_id
-            logging.debug(f"Replay url: {replay_url}")
-            team = self.get_team_list(replay_url, userid)
 
             user = Users(rank=showdown_rank_count, website_rank=website_rank_count, username=userid, team=team, replay_url=replay_url, rating=int(showdown_player_data.elo), upload_date=upload_date)
             logging.info(f"Team found, User object created and added to Teams list: {vars(user)}")
@@ -77,9 +76,9 @@ class ShowdownDataScraper:
         self.save_teams_to_database(team_entity)
         logging.info("Process complete.")
 
-    def get_team_list(self, replay_url: str, userid: str):
+    def get_team_list(self, match_id: str, userid: str):
         team = []
-        replay_data = self.get_replay_data(replay_url)
+        replay_data = self.get_replay_data(match_id)
 
         player_number = None  # either 1 or 2
         if replay_data["p1id"] == userid:
@@ -111,17 +110,18 @@ class ShowdownDataScraper:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
             self.get_ladder_data()
 
-    def get_replay_data(self, replay_url):
+    def get_replay_data(self, match_id):  # TODO add a model for this response
+        # Fetches a specific replay for a given Pokemon Showdown match_id
         try:
-            replay_data = requests.get(replay_url + ".json").json()
+            replay_data = requests.get(self.replays_base_url + match_id + ".json").json()
             if replay_data is None:
                 raise NoHttpResponseException("No response was received from Showdown's specific replay url.")
             return replay_data
         except:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
-            self.get_replay_data(replay_url)
+            self.get_replay_data(match_id)
 
-    def get_recent_match_data(self, userid):
+    def get_recent_match_data(self, userid):  # TODO add a model for this response
         # Fetches all recent Pokemon Showdown match replays (of only the configured format) for a given user
         try:
             recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + self.format).json()
