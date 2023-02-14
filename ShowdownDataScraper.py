@@ -21,13 +21,13 @@ class ShowdownDataScraper:
     num_teams_to_include = 100
 
     def __init__(self):
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
+        logging.basicConfig(level=logging.DEBUG, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
 
     # Ultimate goal is to construct Team and Usage MongoDB entities for a specific date and save to the database
     def scrape_showdown_for_top_teams(self):
         logging.info("Beginning data scraping.")
         #First check if data has already been scraped and saved today, and if so exit script
-        self.exit_script_if_already_run_today()
+        # self.exit_script_if_already_run_today()
 
         # Instantiate Team entity
         # Team entities include data from ladder url (rank, username, rating) and replays url (upload time, id for actual replay, team)
@@ -37,26 +37,30 @@ class ShowdownDataScraper:
 
         # Get Showdown ladder data on top players
         ladder_response = self.get_ladder_data()
-        top_list = ladder_response.toplist
+        top_list = ladder_response.toplist_field
         logging.info(f"Number of players returned by top ladder query: {len(top_list)}")
 
         # Start building DB entities for top 100 teams for TODAY and populate with ladder data
         showdown_rank_count = 1  # counter to track the player's global rank on the Showdown ladder
         website_rank_count = 1  # counter to track the rank of the team on Babiri
+        # Continue to comb though top ladder until we collect 100 teams or run out of players to check
         while len(team_entity.users) < self.num_teams_to_include and showdown_rank_count <= len(top_list):
-            #Convert current player data to ShowdownPlayerData object
-            logging.debug(f"Current player data: {top_list[showdown_rank_count-1]}")
-            showdown_player_data = ShowdownPlayerData(**vars(top_list[showdown_rank_count-1]))
-            userid = showdown_player_data.userid
+            #Get current player
+            showdown_player_data = top_list[showdown_rank_count-1]
+            logging.debug(f"Current player data: {vars(showdown_player_data)}")
+            userid = showdown_player_data.userid_field
+
             # Use showdown ladder data objects to fetch recent replays and add that info to DB entities IF they have recent games
             recent_match_data = self.get_recent_match_data(userid)
+
             # If no recent matches, go to next user
             if len(recent_match_data) == 0:
                 logging.debug("No recent matches were found.")
                 showdown_rank_count += 1
                 continue
+
             logging.debug(f"Number of recent matches: {len(recent_match_data)}")
-            # Additional data to populate User object
+            # Instantiate additional fields for User object from recent_match_data
             upload_date = time.strftime('%Y-%m-%d', time.localtime(recent_match_data[0]["uploadtime"]))
             recent_match_id = recent_match_data[0]["id"]
             replay_url = self.replays_base_url + recent_match_id
@@ -64,14 +68,14 @@ class ShowdownDataScraper:
             team = self.get_team_list(replay_url, userid)
 
             user = Users(rank=showdown_rank_count, website_rank=website_rank_count, username=userid, team=team, replay_url=replay_url, rating=int(showdown_player_data.elo), upload_date=upload_date)
-            logging.info(f"User object created and added to Teams: {vars(user)}")
+            logging.info(f"Team found, User object created and added to Teams list: {vars(user)}")
             team_entity.users.append(user.__dict__)
             showdown_rank_count += 1
             website_rank_count += 1
             time.sleep(1)
-        # Get usage data somehow? From smogon i think? and add it to DB entities
-        logging.info(f"Number of users in Team DB entity: {len(team_entity.users)}")
+        # TODO Get usage data somehow? From Smogon i think? and add it to DB entities
         # Save entities to MongoDB tables
+        logging.info(f"Number of users in Team DB entity: {len(team_entity.users)}")
         self.save_teams_to_database(team_entity)
         logging.info("Process complete.")
 
@@ -103,7 +107,7 @@ class ShowdownDataScraper:
             ladder_response = requests.get(self.ladder_base_url + self.format + ".json").json()
             if ladder_response is None:
                 raise NoHttpResponseException("No response was received from Showdown's ladder url.")
-            return ladder_response
+            return ShowdownLadderData(**ladder_response)
         except:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
             self.get_ladder_data()
