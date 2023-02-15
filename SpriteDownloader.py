@@ -1,23 +1,23 @@
 import sys
 import logging
 import requests
+import os
 from pathlib import Path
 from PIL import Image
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 
+#This script is for downloading missing Pokemon sprite files from Showdown for use by Babiri
 class SpriteDownloader:
 
+    base_download_location = os.environ['spriteFolderLocation']  # set 'spriteFolderLocation' in environment variables to the sprites folder of the Babiri front end
     sprite_folder_url = "https://play.pokemonshowdown.com/sprites/dex/"
-    # base_download_location = "Z:/Downloads/"
-    base_download_location = "C:/Users/guita/Dev/babiri_v1/client/src/img/sprites/"
 
     def __init__(self):
         logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')

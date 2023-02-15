@@ -3,6 +3,7 @@ import logging
 import sys
 import time
 import re
+import os
 
 from Pokemon.exceptions.NoHttpResponseException import NoHttpResponseException
 from models.ShowdownLadderData import ShowdownLadderData
@@ -13,11 +14,13 @@ from pymongo import MongoClient
 
 
 class ShowdownDataScraper:
-    format = "gen9vgc2023series2"
+    # Configure these first 3 fields as desired
+    format = "gen9vgc2023series2"  # Pokemon Showdown format id
+    database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]  # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
+    number_teams_to_include = 100
+
     ladder_base_url = "https://pokemonshowdown.com/ladder/"
     replays_base_url = "https://replay.pokemonshowdown.com/"
-    database = MongoClient("mongodb://127.0.0.1:27017/?directConnection=true")["Babiri"]
-    num_teams_to_include = 100
 
     def __init__(self):
         logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
@@ -42,8 +45,8 @@ class ShowdownDataScraper:
         # Start building DB entities for top 100 teams for TODAY and populate with ladder data
         showdown_rank_count = 1  # counter to track the player's global rank on the Showdown ladder
         website_rank_count = 1  # counter to track the rank of the team on Babiri
-        # Continue to comb though top ladder until we collect 100 teams or run out of players to check
-        while len(team_entity.users) < self.num_teams_to_include and showdown_rank_count <= len(top_list):
+        # Comb through top ladder players until 100 teams are identified or list of players is exhausted
+        while len(team_entity.users) < self.number_teams_to_include and showdown_rank_count <= len(top_list):
             #Get current player
             showdown_player_data = top_list[showdown_rank_count-1]
             logging.debug(f"Current player data: {vars(showdown_player_data)}")
@@ -87,9 +90,9 @@ class ShowdownDataScraper:
             player_number = "p2"
         replay_log = replay_data["log"]
 
-        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s-]+),")
+        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s-]+),")  # Regex for parsing Pokemon names from Showdown replay log
         for match in pattern.finditer(replay_log):
-            team.append(match.group(1).lower().replace(" ", ""))  # Format pokemon names to match sprite files
+            team.append(match.group(1).lower().replace(" ", ""))  # Format pokemon names to match file name of sprites
         logging.debug(f"Team list: {str(team)}")
         return team
 
