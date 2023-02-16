@@ -15,7 +15,7 @@ from pymongo import MongoClient
 
 class ShowdownDataScraper:
     # Configure these first 3 fields as desired
-    format = "gen9vgc2023series2"  # Pokemon Showdown format id
+    format = os.environ['format']  # set 'format' in your environment variables to desired Pokemon Showdown format id, example: gen9vgc2023series2
     database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]  # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
     number_teams_to_include = 100
 
@@ -34,8 +34,8 @@ class ShowdownDataScraper:
         # Instantiate Team entity
         # Team entities include data from ladder url (rank, username, rating) and replays url (upload time, id for actual replay, team)
         team_entity = Teams(date=datetime.today(), format=self.format)
-        logging.info(f"Current date is: {team_entity.date}")
-        logging.info(f"Current format is: {team_entity.format}")
+        logging.info(f"Current date is: {team_entity.date_field}")
+        logging.info(f"Current format is: {team_entity.format_field}")
 
         # Get Showdown ladder data on top players
         ladder_response = self.get_ladder_data()
@@ -46,7 +46,7 @@ class ShowdownDataScraper:
         showdown_rank_count = 1  # counter to track the player's global rank on the Showdown ladder
         website_rank_count = 1  # counter to track the rank of the team on Babiri
         # Comb through top ladder players until 100 teams are identified or list of players is exhausted
-        while len(team_entity.users) < self.number_teams_to_include and showdown_rank_count <= len(top_list):
+        while len(team_entity.users_field) < self.number_teams_to_include and showdown_rank_count <= len(top_list):
             #Get current player
             showdown_player_data = top_list[showdown_rank_count-1]
             logging.debug(f"Current player data: {vars(showdown_player_data)}")
@@ -69,14 +69,14 @@ class ShowdownDataScraper:
 
             user = Users(rank=showdown_rank_count, website_rank=website_rank_count, username=userid, team=team, replay_url=replay_url, rating=int(showdown_player_data.elo), upload_date=upload_date)
             logging.info(f"Team found, User object created and added to Teams list: {vars(user)}")
-            team_entity.users.append(vars(user))
+            team_entity.users_field.append(vars(user))
             showdown_rank_count += 1
             website_rank_count += 1
             time.sleep(1)
         # TODO Get usage data somehow? From Smogon i think? and add it to DB entities
         # Save entities to MongoDB tables
-        logging.info(f"Number of users in Team DB entity: {len(team_entity.users)}")
-        self.save_teams_to_database(team_entity)
+        logging.info(f"Number of users in Team DB entity: {len(team_entity.users_field)}")
+        # self.save_teams_to_database(team_entity)
         logging.info("Process complete.")
 
     def get_team_list(self, match_id: str, userid: str):
