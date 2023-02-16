@@ -105,7 +105,7 @@ class ShowdownDataScraper:
 
     def save_teams_to_database(self, team_entity):
         logging.info(f"Saving teams to database.")
-        mongodb_teams_collection = self.database["teams"]
+        mongodb_teams_collection = self.database["teams"]  # Saves to 'teams' collection in MongoDB database
         mongodb_teams_collection.insert_one(vars(team_entity))
 
     def get_ladder_data(self) -> ShowdownLadderData:
@@ -120,7 +120,7 @@ class ShowdownDataScraper:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
             self.get_ladder_data()
 
-    def get_replay_data(self, match_id):  # TODO add a model for this response
+    def get_replay_data(self, match_id):
         # Fetches a specific replay for a given Pokemon Showdown match_id
         try:
             replay_data = requests.get(self.replays_base_url + match_id + ".json").json()
@@ -131,7 +131,7 @@ class ShowdownDataScraper:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
             self.get_replay_data(match_id)
 
-    def get_recent_match_data(self, userid):  # TODO add a model for this response
+    def get_recent_match_data(self, userid):
         # Fetches all recent Pokemon Showdown match replays (of only the configured format) for a given user
         try:
             recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + self.format).json()
