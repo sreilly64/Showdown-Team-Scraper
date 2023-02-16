@@ -30,7 +30,7 @@ class ShowdownDataScraper:
     # Ultimate goal is to construct Team and Usage MongoDB entities for a specific date and save to the database
     def scrape_showdown_for_top_teams(self):
         logging.info("Beginning data scraping.")
-        #First check if data has already been scraped and saved today, and if so exit script
+        #First check if data for the selected format has already been scraped and saved today, and if so exit script
         self.exit_script_if_already_run_today()
 
         # Get Showdown ladder data on top players
@@ -153,7 +153,7 @@ class ShowdownDataScraper:
         # Sorts database by descending date and grabs first record
         database_entry = self.database["teams"].find().sort("date", -1).limit(1)[0]
         # If db entries' date is today's date, exit script
-        if self.is_datetime_todays_date(database_entry.get("date")):
+        if self.is_datetime_todays_date(database_entry.get("date")) and self.format == database_entry.get("format"):
             logging.info("Showdown data was already scrapped today, exiting script...")
             sys.exit()
 
