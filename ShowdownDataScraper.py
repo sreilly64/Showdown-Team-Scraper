@@ -150,12 +150,16 @@ class ShowdownDataScraper:
         return same_year and same_month and same_day
 
     def exit_script_if_already_run_today(self):
-        # Sorts database by descending date and grabs first record
+        if self.database["teams"].count_documents({}) == 0:
+            return False
+
         database_entry = self.database["teams"].find().sort("date", -1).limit(1)[0]
-        # If db entries' date is today's date, exit script
-        if self.is_datetime_todays_date(database_entry.get("date")) and self.format == database_entry.get("format"):
-            logging.info("Showdown data was already scrapped today, exiting script...")
+        if database_entry["date"] == datetime.datetime.today().strftime('%Y-%m-%d'):
+            print("Data has already been scraped today. Exiting script.")
             sys.exit()
+        else:
+            return False
+
 
 
 def main():
