@@ -142,18 +142,17 @@ class ShowdownDataScraper:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
             self.get_recent_match_data(userid)
 
-    def is_datetime_todays_date(self, input_datetime: datetime) -> bool:
-        # Returns True if input datetime has today's Year-Month-Day
-        same_year = input_datetime.year == datetime.today().year
-        same_month = input_datetime.month == datetime.today().month
-        same_day = input_datetime.day == datetime.today().day
-        return same_year and same_month and same_day
-
     def exit_script_if_already_run_today(self):
-        # Sorts database by descending date and grabs first record
-        database_entry = self.database["teams"].find().sort("date", -1).limit(1)[0]
-        # If db entries' date is today's date, exit script
-        if self.is_datetime_todays_date(database_entry.get("date")) and self.format == database_entry.get("format"):
+        # Check if database is empty for the given format to avoid IndexError
+        if self.database["teams"].count_documents({"format": f"{self.format}"}) == 0:
+            logging.debug(f"No database entries found for format {self.format}.")
+            return
+        # Find records with matching format and sort results by descending date to select the most recent record
+        latest_database_entry = self.database["teams"].find({"format": f"{self.format}"}).sort("date", -1).limit(1)[0]
+        # If the database entry date is today's date, exit script
+        database_entry_date = datetime.strftime(latest_database_entry.get("date"), '%Y-%m-%d')
+        todays_date = datetime.today().strftime('%Y-%m-%d')
+        if database_entry_date == todays_date:
             logging.info("Showdown data was already scrapped today, exiting script...")
             sys.exit()
 
