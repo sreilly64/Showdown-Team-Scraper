@@ -97,7 +97,7 @@ class ShowdownDataScraper:
             player_number = "p2"
         replay_log = replay_data["log"]
 
-        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s-]+),")  # Regex for parsing Pokemon names from Showdown replay log
+        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s-]+)[,|]")  # Regex for parsing Pokemon names from Showdown replay log
         for match in pattern.finditer(replay_log):
             team.append(match.group(1).lower().replace(" ", ""))  # Format pokemon names to match file name of sprites
         logging.debug(f"Team list: {str(team)}")
