@@ -6,6 +6,7 @@ import re
 import os
 
 from exceptions.NoHttpResponseException import NoHttpResponseException
+from exceptions.InvalidFormatException import InvalidFormatException
 from models.ShowdownPlayerData import ShowdownPlayerData
 from models.ShowdownLadderData import ShowdownLadderData
 from models.teams import Teams
@@ -36,6 +37,8 @@ class ShowdownDataScraper:
         # Get Showdown ladder data on top players
         ladder_response = self.get_ladder_data()
         top_list = ladder_response.toplist_field
+        if len(top_list) == 0:
+            raise InvalidFormatException("The format id used was invalid as the Showdown ladder api did not return any users.")
         logging.info(f"Number of players returned by top ladder query: {len(top_list)}")
 
         # Start building DB entities for top 100 teams for TODAY and populate with ladder data
