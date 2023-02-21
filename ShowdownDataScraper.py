@@ -67,7 +67,7 @@ class ShowdownDataScraper:
 
             # Use showdown ladder data objects to fetch recent replays and add that info to DB entities IF they have recent games
             recent_match_data = self.get_recent_match_data(userid)
-            logging.debug(f"Number of recent matches: {len(recent_match_data)}")
+
             # If no recent matches, go to next user
             if len(recent_match_data) == 0:
                 logging.debug(f"No recent matches were found for {userid}.")
@@ -116,33 +116,34 @@ class ShowdownDataScraper:
         try:
             logging.info(f"Fetching ladder for {self.format}.")
             ladder_response = requests.get(self.ladder_base_url + self.format + ".json").json()
-            if ladder_response is None:
+            if (ladder_response is None) or (isinstance(ladder_response, type(None))):
                 raise NoHttpResponseException("No response was received from Showdown's ladder url.")
             return ShowdownLadderData(**ladder_response)
-        except:
-            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
+        except Exception as e:
+            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
             self.get_ladder_data()
 
     def get_replay_data(self, match_id):
         # Fetches a specific replay for a given Pokemon Showdown match_id
         try:
             replay_data = requests.get(self.replays_base_url + match_id + ".json").json()
-            if replay_data is None:
+            if replay_data is None or (isinstance(replay_data, type(None))):
                 raise NoHttpResponseException("No response was received from Showdown's specific replay url.")
             return replay_data
-        except:
-            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
+        except Exception as e:
+            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
             self.get_replay_data(match_id)
 
     def get_recent_match_data(self, userid):
         # Fetches all recent Pokemon Showdown match replays (of only the configured format) for a given user
         try:
             recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + self.format).json()
-            if recent_matches is None:
+            if recent_matches is None or (isinstance(recent_matches, type(None))):
                 raise NoHttpResponseException("No response was received from Showdown's recent replays url.")
+            logging.debug(f"Number of recent matches: {len(recent_matches)}")
             return recent_matches
-        except:
-            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]}")
+        except Exception as e:
+            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
             self.get_recent_match_data(userid)
 
     def exit_script_if_already_run_today(self):
