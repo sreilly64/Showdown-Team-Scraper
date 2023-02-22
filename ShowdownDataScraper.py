@@ -1,4 +1,5 @@
 import threading
+import traceback
 import requests
 import logging
 import sys
@@ -6,14 +7,15 @@ import time
 import re
 import os
 
-from exceptions.NoHttpResponseException import NoHttpResponseException
+from exceptions.HttpResponseException import HttpResponseException
 from exceptions.InvalidFormatException import InvalidFormatException
 from models.ShowdownPlayerData import ShowdownPlayerData
 from models.ShowdownLadderData import ShowdownLadderData
+from json.decoder import JSONDecodeError
+from pymongo import MongoClient
 from models.teams import Teams
 from models.users import Users
 from datetime import datetime
-from pymongo import MongoClient
 from typing import List
 
 
@@ -120,36 +122,60 @@ class ShowdownDataScraper:
         # Fetches a list of the top 500 players on the Pokémon Showdown ladder for the configured competitive format.
         try:
             logging.info(f"Fetching ladder for {format}.")
-            ladder_response = requests.get(self.ladder_base_url + format + ".json").json()
-            if (ladder_response is None) or (isinstance(ladder_response, type(None))):
-                raise NoHttpResponseException("No response was received from Showdown's ladder url.")
-            return ShowdownLadderData(**ladder_response)
-        except Exception as e:
-            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
-            self.get_ladder_data(format)
+            ladder_response = requests.get(self.ladder_base_url + format + ".json")
+            logging.debug(f"ladder_response for format {format}: {str(ladder_response)}")
+            if (ladder_response.status_code != 200) or (ladder_response is None) or (ladder_response.text == "") or (ladder_response.json() is None):
+                raise HttpResponseException(f"Received bad response from ladder api for format {format}. Response: {str(ladder_response)}")
+            return ShowdownLadderData(**ladder_response.json())
+        except (JSONDecodeError, HttpResponseException):
+            logging.error(f"Received bad or no response from ladder api for format {format}.\nRetrying...")
+            traceback.print_exc()
+            time.sleep(3)
+            return self.get_ladder_data(format)
+        except Exception:
+            logging.error(f"Unexpected error occurred when trying to get ladder data for {format}.\nRetrying...")
+            traceback.print_exc()
+            time.sleep(3)
+            return self.get_ladder_data(format)
 
     def get_replay_data(self, match_id):
         # Fetches a specific replay for a given Pokémon Showdown match_id
         try:
-            replay_data = requests.get(self.replays_base_url + match_id + ".json").json()
-            if (replay_data is None) or (isinstance(replay_data, type(None))):
-                raise NoHttpResponseException("No response was received from Showdown's specific replay url.")
-            return replay_data
-        except Exception as e:
-            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
-            self.get_replay_data(match_id)
+            replay_data = requests.get(self.replays_base_url + match_id + ".json")
+            logging.debug(f"replay_data for match_id {match_id}: {str(replay_data)}")
+            if (replay_data.status_code != 200) or (replay_data is None) or (replay_data.text == "") or (replay_data.json() is None):
+                raise HttpResponseException(f"Received bad response from replay api for id {match_id}. Response: {str(replay_data)}")
+            return replay_data.json()
+        except (JSONDecodeError, HttpResponseException):
+            logging.error(f"Received bad or no response from replay api for id {match_id}.\nRetrying...")
+            traceback.print_exc()
+            time.sleep(3)
+            return self.get_replay_data(match_id)
+        except Exception:
+            logging.error(f"Unexpected error occurred when trying to get replay for id {match_id}.\nRetrying...")
+            traceback.print_exc()
+            time.sleep(3)
+            return self.get_replay_data(match_id)
 
     def get_recent_match_data(self, userid: str, format: str):
         # Fetches all recent Pokémon Showdown match replays (of only the configured format) for a given user
         try:
-            recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + format).json()
-            if (recent_matches is None) or (isinstance(recent_matches, type(None))):
-                raise NoHttpResponseException("No response was received from Showdown's recent replays url.")
-            logging.debug(f"Number of recent matches: {len(recent_matches)}")
-            return recent_matches
-        except Exception as e:
-            logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
-            self.get_recent_match_data(userid, format)
+            recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + format)
+            logging.debug(f"recent_matches for user {userid} and format {format}: {str(recent_matches)}")
+            if (recent_matches.status_code != 200) or (recent_matches is None) or (recent_matches.text == "") or (recent_matches.json() is None):
+                raise HttpResponseException(f"Received bad response from recent matches api for {userid} and {format}. Response: {str(recent_matches)}")
+            logging.debug(f"Number of recent matches: {len(recent_matches.json())}")
+            return recent_matches.json()
+        except (JSONDecodeError, HttpResponseException):
+            logging.error(f"Received bad or no response from recent matches api for user {userid} and format {format}.\nRetrying...")
+            traceback.print_exc()
+            time.sleep(3)
+            return self.get_recent_match_data(userid, format)
+        except Exception:
+            logging.error(f"Unexpected error occurred when trying to get recent matches for user {userid} and format {format}.\nRetrying...")
+            traceback.print_exc()
+            time.sleep(3)
+            return self.get_recent_match_data(userid, format)
 
     def exit_script_if_already_run_today(self, format: str):
         # Check if database is empty for the given format to avoid IndexError
