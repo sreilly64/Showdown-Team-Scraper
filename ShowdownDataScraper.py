@@ -1,3 +1,4 @@
+import threading
 import requests
 import logging
 import sys
@@ -18,43 +19,47 @@ from typing import List
 
 class ShowdownDataScraper:
     # Configure these first 3 fields as desired
-    format = os.environ['format']  # set 'format' in your environment variables to desired Pokemon Showdown format id, example: gen9vgc2023series2
-    database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]  # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
+    # set 'formats' in your environment variables to comma separated list of Pokémon Showdown format ids, example: gen9vgc2023series2, gen9doublesou
+    formats = os.environ['formats'].replace(" ", "").split(",")
+    # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
+    database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]
     number_teams_to_include = 100
 
+    threads = []
     ladder_base_url = "https://pokemonshowdown.com/ladder/"
     replays_base_url = "https://replay.pokemonshowdown.com/"
 
     def __init__(self):
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
+        logging.basicConfig(level=logging.INFO, format=f"%(asctime)s | %(levelname)s | %(threadName)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
 
     # Ultimate goal is to construct Team and Usage MongoDB entities for a specific date and save to the database
     def scrape_showdown_for_top_teams(self):
         logging.info("Beginning data scraping.")
         #First check if data for the selected format has already been scraped and saved today, and if so exit script
-        self.exit_script_if_already_run_today()
+        format = self.formats.pop()
+        self.exit_script_if_already_run_today(format)
 
         # Get Showdown ladder data on top players
-        ladder_response = self.get_ladder_data()
+        ladder_response = self.get_ladder_data(format)
         top_list = ladder_response.toplist_field
         if len(top_list) == 0:
             raise InvalidFormatException("The format id used was invalid as the Showdown ladder api did not return any users.")
-        logging.info(f"Number of players returned by top ladder query: {len(top_list)}")
+        logging.info(f"Number of players returned by {format} top ladder query: {len(top_list)}")
 
         # Start building DB entities for top 100 teams for TODAY and populate with ladder data
-        team_entity = self.build_team_entity(top_list)
+        team_entity = self.build_team_entity(top_list, format)
         # TODO Get usage data somehow? From Smogon i think? and add it to DB entities
         # Save entities to MongoDB tables
-        logging.info(f"Number of users in Team DB entity: {len(team_entity.users_field)}")
+        logging.info(f"Number of users in {format} Team database entity: {len(team_entity.users_field)}")
         self.save_teams_to_database(team_entity)
-        logging.info("Process complete.")
+        logging.info(f"Process completed for {format}.")
 
-    def build_team_entity(self, top_list: List[ShowdownPlayerData]) -> Teams:
+    def build_team_entity(self, top_list: List[ShowdownPlayerData], format: str) -> Teams:
         # Instantiate Team entity
         # Team entities include data from ladder url (rank, username, rating) and replays url (upload time, id for actual replay, team)
-        team_entity = Teams(date=datetime.today(), format=self.format)
-        logging.info(f"Current date is: {team_entity.date_field}")
-        logging.info(f"Current format is: {team_entity.format_field}")
+        team_entity = Teams(date=datetime.today(), format=format)
+        logging.debug(f"Current date is: {team_entity.date_field}")
+        logging.debug(f"Current format is: {team_entity.format_field}")
 
         showdown_rank_count = 1  # counter to track the player's global rank on the Showdown ladder
         website_rank_count = 1  # counter to track the rank of the team on Babiri
@@ -66,7 +71,7 @@ class ShowdownDataScraper:
             userid = showdown_player_data.userid_field
 
             # Use showdown ladder data objects to fetch recent replays and add that info to DB entities IF they have recent games
-            recent_match_data = self.get_recent_match_data(userid)
+            recent_match_data = self.get_recent_match_data(userid, format)
 
             # If no recent matches, go to next user
             if len(recent_match_data) == 0:
@@ -82,7 +87,7 @@ class ShowdownDataScraper:
 
             user = Users(rank=showdown_rank_count, website_rank=website_rank_count, username=userid, team=team, replay_url=replay_url, rating=int(showdown_player_data.elo), upload_date=upload_date)
             team_entity.users_field.append(vars(user))
-            logging.info(f"Team found, User object created and added to Teams list: {vars(user)}")
+            logging.info(f"{format} team found, User object created and added to Teams list: {vars(user)}")
 
             showdown_rank_count += 1
             website_rank_count += 1
@@ -100,9 +105,9 @@ class ShowdownDataScraper:
             player_number = "p2"
         replay_log = replay_data["log"]
 
-        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s-]+)[,|]")  # Regex for parsing Pokemon names from Showdown replay log
+        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s-]+)[,|]")  # Regex for parsing Pokémon names from Showdown replay log
         for match in pattern.finditer(replay_log):
-            team.append(match.group(1).lower().replace(" ", ""))  # Format pokemon names to match file name of sprites
+            team.append(match.group(1).lower().replace(" ", ""))  # Format Pokémon names to match file name of sprites
         logging.debug(f"Team list: {str(team)}")
         return team
 
@@ -111,59 +116,71 @@ class ShowdownDataScraper:
         mongodb_teams_collection = self.database["teams"]  # Saves to 'teams' collection in MongoDB database
         mongodb_teams_collection.insert_one(vars(team_entity))
 
-    def get_ladder_data(self) -> ShowdownLadderData:
-        # Fetches a list of the top 500 players on the Pokemon Showdown ladder for the configured competitive format.
+    def get_ladder_data(self, format: str) -> ShowdownLadderData:
+        # Fetches a list of the top 500 players on the Pokémon Showdown ladder for the configured competitive format.
         try:
-            logging.info(f"Fetching ladder for {self.format}.")
-            ladder_response = requests.get(self.ladder_base_url + self.format + ".json").json()
+            logging.info(f"Fetching ladder for {format}.")
+            ladder_response = requests.get(self.ladder_base_url + format + ".json").json()
             if (ladder_response is None) or (isinstance(ladder_response, type(None))):
                 raise NoHttpResponseException("No response was received from Showdown's ladder url.")
             return ShowdownLadderData(**ladder_response)
         except Exception as e:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
-            self.get_ladder_data()
+            self.get_ladder_data(format)
 
     def get_replay_data(self, match_id):
-        # Fetches a specific replay for a given Pokemon Showdown match_id
+        # Fetches a specific replay for a given Pokémon Showdown match_id
         try:
             replay_data = requests.get(self.replays_base_url + match_id + ".json").json()
-            if replay_data is None or (isinstance(replay_data, type(None))):
+            if (replay_data is None) or (isinstance(replay_data, type(None))):
                 raise NoHttpResponseException("No response was received from Showdown's specific replay url.")
             return replay_data
         except Exception as e:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
             self.get_replay_data(match_id)
 
-    def get_recent_match_data(self, userid):
-        # Fetches all recent Pokemon Showdown match replays (of only the configured format) for a given user
+    def get_recent_match_data(self, userid: str, format: str):
+        # Fetches all recent Pokémon Showdown match replays (of only the configured format) for a given user
         try:
-            recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + self.format).json()
-            if recent_matches is None or (isinstance(recent_matches, type(None))):
+            recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + format).json()
+            if (recent_matches is None) or (isinstance(recent_matches, type(None))):
                 raise NoHttpResponseException("No response was received from Showdown's recent replays url.")
             logging.debug(f"Number of recent matches: {len(recent_matches)}")
             return recent_matches
         except Exception as e:
             logging.error(f"Unexpected error when trying to get ladder data: {sys.exc_info()[0]} - {e}")
-            self.get_recent_match_data(userid)
+            self.get_recent_match_data(userid, format)
 
-    def exit_script_if_already_run_today(self):
+    def exit_script_if_already_run_today(self, format: str):
         # Check if database is empty for the given format to avoid IndexError
-        if self.database["teams"].count_documents({"format": f"{self.format}"}) == 0:
-            logging.debug(f"No database entries found for format {self.format}.")
+        if self.database["teams"].count_documents({"format": f"{format}"}) == 0:
+            logging.debug(f"No database entries found for format {format}.")
             return
         # Find records with matching format and sort results by descending date to select the most recent record
-        latest_database_entry = self.database["teams"].find({"format": f"{self.format}"}).sort("date", -1).limit(1)[0]
+        latest_database_entry = self.database["teams"].find({"format": f"{format}"}).sort("date", -1).limit(1)[0]
         # If the database entry date is today's date, exit script
         database_entry_date = datetime.strftime(latest_database_entry.get("date"), '%Y-%m-%d')
         todays_date = datetime.today().strftime('%Y-%m-%d')
         if database_entry_date == todays_date:
-            logging.info("Showdown data was already scrapped today, exiting script...")
+            logging.info(f"Showdown data for {format} was already scrapped today, closing thread...")
             sys.exit()
 
+    def main(self):
+        number_of_threads = len(self.formats)
+        if number_of_threads == 0:
+            raise InvalidFormatException("No Pokemon Showdown formats were provided.")
+        for _ in range(number_of_threads):
+            t = threading.Thread(target=self.scrape_showdown_for_top_teams)
+            t.daemon = True
+            self.threads.append(t)
 
-def main():
-    ShowdownDataScraper().scrape_showdown_for_top_teams()
+        for i in range(number_of_threads):
+            logging.info(f"Starting thread {i+1}.")
+            self.threads[i].start()
+
+        for i in range(number_of_threads):
+            self.threads[i].join()
 
 
 if __name__ == '__main__':
-    main()
+    ShowdownDataScraper().main()
