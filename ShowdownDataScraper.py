@@ -123,9 +123,9 @@ class ShowdownDataScraper:
         try:
             logging.info(f"Fetching ladder for {format}.")
             ladder_response = requests.get(self.ladder_base_url + format + ".json")
-            logging.debug(f"ladder_response for format {format}: {str(ladder_response)}")
+            logging.debug(f"ladder_response for format {format}: {vars(ladder_response)}")
             if (ladder_response.status_code != 200) or (ladder_response is None) or (ladder_response.text == "") or (ladder_response.json() is None):
-                raise HttpResponseException(f"Received bad response from ladder api for format {format}. Response: {str(ladder_response)}")
+                raise HttpResponseException(f"Received bad response from ladder api for format {format}. Response: {vars(ladder_response)}")
             return ShowdownLadderData(**ladder_response.json())
         except (JSONDecodeError, HttpResponseException):
             logging.error(f"Received bad or no response from ladder api for format {format}.\nRetrying...")
@@ -133,7 +133,7 @@ class ShowdownDataScraper:
             time.sleep(3)
             return self.get_ladder_data(format)
         except Exception:
-            logging.error(f"Unexpected error occurred when trying to get ladder data for {format}.\nRetrying...")
+            logging.error(f"Unexpected error occurred when trying to get ladder data for {format}. Retrying...")
             traceback.print_exc()
             time.sleep(3)
             return self.get_ladder_data(format)
@@ -142,17 +142,17 @@ class ShowdownDataScraper:
         # Fetches a specific replay for a given Pokémon Showdown match_id
         try:
             replay_data = requests.get(self.replays_base_url + match_id + ".json")
-            logging.debug(f"replay_data for match_id {match_id}: {str(replay_data)}")
+            logging.debug(f"replay_data for match_id {match_id}: {vars(replay_data)}")
             if (replay_data.status_code != 200) or (replay_data is None) or (replay_data.text == "") or (replay_data.json() is None):
-                raise HttpResponseException(f"Received bad response from replay api for id {match_id}. Response: {str(replay_data)}")
+                raise HttpResponseException(f"Received bad response from replay api for id {match_id}. Response: {vars(replay_data)}")
             return replay_data.json()
         except (JSONDecodeError, HttpResponseException):
-            logging.error(f"Received bad or no response from replay api for id {match_id}.\nRetrying...")
+            logging.error(f"Received bad or no response from replay api for id {match_id}. Retrying...")
             traceback.print_exc()
             time.sleep(3)
             return self.get_replay_data(match_id)
         except Exception:
-            logging.error(f"Unexpected error occurred when trying to get replay for id {match_id}.\nRetrying...")
+            logging.error(f"Unexpected error occurred when trying to get replay for id {match_id}. Retrying...")
             traceback.print_exc()
             time.sleep(3)
             return self.get_replay_data(match_id)
@@ -161,18 +161,18 @@ class ShowdownDataScraper:
         # Fetches all recent Pokémon Showdown match replays (of only the configured format) for a given user
         try:
             recent_matches = requests.get(self.replays_base_url + "search.json?user=" + userid + "&format=" + format)
-            logging.debug(f"recent_matches for user {userid} and format {format}: {str(recent_matches)}")
+            logging.debug(f"recent_matches for user {userid} and format {format}: {vars(recent_matches)}")
             if (recent_matches.status_code != 200) or (recent_matches is None) or (recent_matches.text == "") or (recent_matches.json() is None):
-                raise HttpResponseException(f"Received bad response from recent matches api for {userid} and {format}. Response: {str(recent_matches)}")
+                raise HttpResponseException(f"Received bad response from recent matches api for {userid} and {format}. Response: {vars(recent_matches)}")
             logging.debug(f"Number of recent matches: {len(recent_matches.json())}")
             return recent_matches.json()
         except (JSONDecodeError, HttpResponseException):
-            logging.error(f"Received bad or no response from recent matches api for user {userid} and format {format}.\nRetrying...")
+            logging.error(f"Received bad or no response from recent matches api for user {userid} and format {format}. Retrying...")
             traceback.print_exc()
             time.sleep(3)
             return self.get_recent_match_data(userid, format)
         except Exception:
-            logging.error(f"Unexpected error occurred when trying to get recent matches for user {userid} and format {format}.\nRetrying...")
+            logging.error(f"Unexpected error occurred when trying to get recent matches for user {userid} and format {format}. Retrying...")
             traceback.print_exc()
             time.sleep(3)
             return self.get_recent_match_data(userid, format)
@@ -193,7 +193,7 @@ class ShowdownDataScraper:
 
     def main(self):
         number_of_threads = len(self.formats)
-        if number_of_threads == 0:
+        if number_of_threads == 0 or (number_of_threads == 1 and self.formats[0] == ""):
             raise InvalidFormatException("No Pokemon Showdown formats were provided.")
         for _ in range(number_of_threads):
             t = threading.Thread(target=self.scrape_showdown_for_top_teams)
