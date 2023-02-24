@@ -32,7 +32,7 @@ class ShowdownDataScraper:
     replays_base_url = "https://replay.pokemonshowdown.com/"
 
     def __init__(self):
-        logging.basicConfig(level=logging.INFO, format=f"%(asctime)s | %(levelname)s | %(threadName)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
+        logging.basicConfig(level=logging.INFO, format=f"%(asctime)s | %(threadName)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
 
     # Ultimate goal is to construct Team and Usage MongoDB entities for a specific date and save to the database
     def scrape_showdown_for_top_teams(self):
@@ -45,7 +45,7 @@ class ShowdownDataScraper:
         ladder_response = self.get_ladder_data(format)
         top_list = ladder_response.toplist_field
         if len(top_list) == 0:
-            raise InvalidFormatException("The format id used was invalid as the Showdown ladder api did not return any users.")
+            raise InvalidFormatException(f"The format id {format} is invalid as the Showdown ladder api did not return any users.")
         logging.info(f"Number of players returned by {format} top ladder query: {len(top_list)}")
 
         # Start building DB entities for top 100 teams for TODAY and populate with ladder data
