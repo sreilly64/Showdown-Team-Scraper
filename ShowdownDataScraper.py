@@ -12,20 +12,22 @@ from exceptions.InvalidFormatException import InvalidFormatException
 from models.ShowdownPlayerData import ShowdownPlayerData
 from models.ShowdownLadderData import ShowdownLadderData
 from json.decoder import JSONDecodeError
-from pymongo import MongoClient
+from pymongo import MongoClient, InsertOne
 from models.teams import Teams
 from models.users import Users
+from models.teamusage import TeamUsage
+from models.usage import Usage
 from datetime import datetime
 from typing import List
 
 
 class ShowdownDataScraper:
     # Configure these first 3 fields as desired
-    # set 'formats' in your environment variables to a comma separated list of Pokémon Showdown format ids, example: gen9vgc2023series2, gen9doublesou
+    # set 'formats' in your environment variables to a comma separated list of Pokémon Showdown format ids, example: gen9vgc2023series2, gen9doublesou, gen9doublesuu, gen9doublesubers
     formats = os.environ['formats'].replace(" ", "").split(",")
     # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
     database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]
-    number_teams_to_include = 100
+    number_teams_to_include = 10
 
     threads = []
     ladder_base_url = "https://pokemonshowdown.com/ladder/"
@@ -48,14 +50,16 @@ class ShowdownDataScraper:
             raise InvalidFormatException(f"The format id {format} is invalid as the Showdown ladder api did not return any users.")
         logging.info(f"Number of players returned by {format} top ladder query: {len(top_list)}")
 
-        # Start building DB entities for top 100 teams for TODAY and populate with ladder data
+        # Start building database entities for top 100 teams for today and populate with ladder data
         team_entity = self.build_team_entity(top_list, format)
+        logging.info(f"Number of users in {format} Team database entity: {len(team_entity.users_field)}")
 
-        # TODO calculate daily usage data
+        #calculate daily usage for pokemon based on user teams and add them to usage list in team_entity
+        team_entity = self.calculate_usage_stats(team_entity)
 
         # Save entities to MongoDB tables
-        logging.info(f"Number of users in {format} Team database entity: {len(team_entity.users_field)}")
         self.save_teams_to_database(team_entity)
+        self.save_usage_stats_to_database(team_entity)
         logging.info(f"Process completed for {format}.")
 
     def build_team_entity(self, top_list: List[ShowdownPlayerData], format: str) -> Teams:
@@ -98,6 +102,28 @@ class ShowdownDataScraper:
             time.sleep(1)
         return team_entity
 
+    #Method takes in a Teams object and calculates/adds "usage" field
+    def calculate_usage_stats(self, team_entity: Teams) -> Teams:
+        users = team_entity.users_field
+        pokemon_count_dict = self.get_pokemon_usage_count_dict(users)  # key = Pokémon name, value = usage count
+        while len(pokemon_count_dict) > 0:
+            usage_count = pokemon_count_dict.popitem()
+            mon = usage_count[0]
+            count = usage_count[1]
+            percent = round(count / self.number_teams_to_include, 2) * 100
+            usage = TeamUsage(mon=mon, freq=count, percent=percent)
+            team_entity.usage_field.append(vars(usage))
+        return team_entity
+
+    def get_pokemon_usage_count_dict(self, users: dict):
+        pokemon_count_dict = {}  # key = Pokémon name, value = usage count
+        for user in users:
+            team = user["team"]
+            for mon in team:
+                current_count = pokemon_count_dict.get(mon, 0)
+                pokemon_count_dict.update({mon: current_count + 1})
+        return pokemon_count_dict
+
     def get_team_list(self, match_id: str, userid: str):
         team = []
         replay_data = self.get_replay_data(match_id)
@@ -116,9 +142,25 @@ class ShowdownDataScraper:
         return team
 
     def save_teams_to_database(self, team_entity):
-        logging.info(f"Saving teams to database.")
+        logging.info(f"Saving {team_entity.format_field} teams to database...")
         mongodb_teams_collection = self.database["teams"]  # Saves to 'teams' collection in MongoDB database
         mongodb_teams_collection.insert_one(vars(team_entity))
+        logging.info(f"Successfully saved {team_entity.format_field} teams to database.")
+
+    def save_usage_stats_to_database(self, team_entity: Teams):
+        logging.info(f"Saving {team_entity.format_field} usage stats to database...")
+        team_usage = team_entity.usage_field  # array of usage stats for each Pokémon across teams
+        date = team_entity.date_field
+        format = team_entity.format_field
+        usage_entity_list = []
+        for usage_stat in team_usage:
+            usage = {"freq": usage_stat["freq"], "percent": usage_stat["percent"]}
+            mon = usage_stat["mon"]
+            usage_entity = Usage(date=date, format=format, pokemon=mon, usage=usage)
+            usage_entity_list.append(usage_entity)
+
+        mongodb_teams_collection = self.database["usage"]  # Saves to 'usage' collection in MongoDB database
+        mongodb_teams_collection.bulk_write([InsertOne(vars(usage_entity)) for usage_entity in usage_entity_list])
 
     def get_ladder_data(self, format: str) -> ShowdownLadderData:
         # Fetches a list of the top 500 players on the Pokémon Showdown ladder for the configured competitive format.

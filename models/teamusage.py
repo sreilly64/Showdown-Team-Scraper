@@ -1,4 +1,4 @@
-class Usage:
+class TeamUsage:
     def __init__(self, mon: str = None, freq: int = None, percent: float = None):
         self.mon = mon
         self.freq = freq
