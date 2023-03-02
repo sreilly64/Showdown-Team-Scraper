@@ -21,7 +21,7 @@ from typing import List
 
 class ShowdownDataScraper:
     # Configure these first 3 fields as desired
-    # set 'formats' in your environment variables to comma separated list of Pokémon Showdown format ids, example: gen9vgc2023series2, gen9doublesou
+    # set 'formats' in your environment variables to a comma separated list of Pokémon Showdown format ids, example: gen9vgc2023series2, gen9doublesou
     formats = os.environ['formats'].replace(" ", "").split(",")
     # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
     database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]
@@ -50,7 +50,9 @@ class ShowdownDataScraper:
 
         # Start building DB entities for top 100 teams for TODAY and populate with ladder data
         team_entity = self.build_team_entity(top_list, format)
-        # TODO Get usage data somehow? From Smogon i think? and add it to DB entities
+
+        # TODO calculate daily usage data
+
         # Save entities to MongoDB tables
         logging.info(f"Number of users in {format} Team database entity: {len(team_entity.users_field)}")
         self.save_teams_to_database(team_entity)
