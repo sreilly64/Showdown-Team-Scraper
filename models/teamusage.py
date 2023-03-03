@@ -1,5 +1,5 @@
 class TeamUsage:
-    def __init__(self, mon: str = None, freq: int = None, percent: float = None):
+    def __init__(self, mon: str = None, freq: int = None, percent: int = None):
         self.mon = mon
         self.freq = freq
         self.percent = percent
@@ -25,5 +25,5 @@ class TeamUsage:
         self.freq = value
 
     @percent_field.setter
-    def percent_field(self, value: float):
+    def percent_field(self, value: int):
         self.percent = value

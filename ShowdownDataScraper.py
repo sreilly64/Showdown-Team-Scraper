@@ -19,15 +19,16 @@ from models.teamusage import TeamUsage
 from models.usage import Usage
 from datetime import datetime
 from typing import List
+from decimal import *
 
 
 class ShowdownDataScraper:
     # Configure these first 3 fields as desired
-    # set 'formats' in your environment variables to a comma separated list of Pokémon Showdown format ids, example: gen9vgc2023series2, gen9doublesou, gen9doublesuu, gen9doublesubers
+    # set 'formats' in your environment variables to a comma separated list of Pokémon Showdown format ids, example: gen9vgc2023regulationc, gen9paldeaprologue, gen9vgc2023series2, gen9doublesou, gen9doublesuu, gen9doublesubers
     formats = os.environ['formats'].replace(" ", "").split(",")
     # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
     database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]
-    number_teams_to_include = 10
+    number_teams_to_include = 100
 
     threads = []
     ladder_base_url = "https://pokemonshowdown.com/ladder/"
@@ -35,6 +36,7 @@ class ShowdownDataScraper:
 
     def __init__(self):
         logging.basicConfig(level=logging.INFO, format=f"%(asctime)s | %(threadName)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
+        getcontext().prec = 2
 
     # Ultimate goal is to construct Team and Usage MongoDB entities for a specific date and save to the database
     def scrape_showdown_for_top_teams(self):
@@ -107,12 +109,13 @@ class ShowdownDataScraper:
         users = team_entity.users_field
         pokemon_count_dict = self.get_pokemon_usage_count_dict(users)  # key = Pokémon name, value = usage count
         while len(pokemon_count_dict) > 0:
-            usage_count = pokemon_count_dict.popitem()
+            usage_count = pokemon_count_dict.popitem()  # tuple with (pokemon, count)
             mon = usage_count[0]
             count = usage_count[1]
-            percent = round(count / self.number_teams_to_include, 2) * 100
-            usage = TeamUsage(mon=mon, freq=count, percent=percent)
+            percent = Decimal(count) / Decimal(len(users)) * Decimal(100)
+            usage = TeamUsage(mon=mon, freq=count, percent=int(percent))
             team_entity.usage_field.append(vars(usage))
+        team_entity.usage_field.sort(reverse=True, key=lambda team_usage: team_usage["percent"])
         return team_entity
 
     def get_pokemon_usage_count_dict(self, users: dict):
@@ -161,6 +164,7 @@ class ShowdownDataScraper:
 
         mongodb_teams_collection = self.database["usage"]  # Saves to 'usage' collection in MongoDB database
         mongodb_teams_collection.bulk_write([InsertOne(vars(usage_entity)) for usage_entity in usage_entity_list])
+        logging.info(f"Successfully saved {team_entity.format_field} daily usage stats to database.")
 
     def get_ladder_data(self, format: str) -> ShowdownLadderData:
         # Fetches a list of the top 500 players on the Pokémon Showdown ladder for the configured competitive format.
