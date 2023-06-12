@@ -24,7 +24,7 @@ from decimal import *
 
 class ShowdownDataScraper:
     # Configure these first 3 fields as desired
-    # set 'formats' in your environment variables to a comma separated list of Pokémon Showdown format ids, example: gen9vgc2023regulationc, gen9paldeaprologue, gen9vgc2023series2, gen9doublesou, gen9doublesuu, gen9doublesubers
+    # set 'formats' in your environment variables to a comma separated list of Pokémon Showdown format ids, example: gen9vgc2023regulationd, gen9vgc2023regulationc, gen9paldeaprologue, gen9vgc2023series2, gen9doublesou, gen9doublesuu, gen9doublesubers
     formats = os.environ['formats'].replace(" ", "").split(",")
     # set 'mongoURI' and 'databaseName' in your environment variables to connect to your desired mongoDB
     database = MongoClient(os.environ['mongoURI'])[os.environ['databaseName']]
@@ -138,9 +138,9 @@ class ShowdownDataScraper:
             player_number = "p2"
         replay_log = replay_data["log"]
 
-        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s-]+)[,|]")  # Regex for parsing Pokémon names from Showdown replay log
+        pattern = re.compile(f"poke\|{player_number}\|([\\w\\s*-]+)[,|]")  # Regex for parsing Pokémon names from Showdown replay log
         for match in pattern.finditer(replay_log):
-            team.append(match.group(1).lower().replace(" ", ""))  # Format Pokémon names to match file name of sprites
+            team.append(match.group(1).lower().replace(" ", "").replace("-*", ""))  # Format Pokémon names to match file name of sprites
         logging.debug(f"Team list: {str(team)}")
         return team
 
