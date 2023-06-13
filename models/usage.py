@@ -1,29 +1,41 @@
+from datetime import datetime
+
+
 class Usage:
-    def __init__(self, mon: str = None, freq: int = None, percent: float = None):
-        self.mon = mon
-        self.freq = freq
-        self.percent = percent
+    def __init__(self, date: datetime = None, format: str = None, pokemon: str = None, usage: dict = {}):
+        self.date = date
+        self.format = format
+        self.pokemon = pokemon
+        self.usage = usage
 
     @property
-    def mon_field(self):
-        return self.mon
+    def date_field(self):
+        return self.date
 
     @property
-    def freq_field(self):
-        return self.freq
+    def format_field(self):
+        return self.format
 
     @property
-    def percent_field(self):
-        return self.percent
+    def pokemon_field(self):
+        return self.pokemon
 
-    @mon_field.setter
-    def mon_field(self, value: str):
-        self.mon = value
+    @property
+    def usage_field(self):
+        return self.usage
 
-    @freq_field.setter
-    def freq_field(self, value: int):
-        self.freq = value
+    @date_field.setter
+    def date_field(self, value: datetime):
+        self.date = value
 
-    @percent_field.setter
-    def percent_field(self, value: float):
-        self.percent = value
+    @format_field.setter
+    def format_field(self, value: str):
+        self.format = value
+
+    @pokemon_field.setter
+    def pokemon_field(self, value: str):
+        self.pokemon = value
+
+    @usage_field.setter
+    def usage_field(self, value: dict):
+        self.usage = value

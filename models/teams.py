@@ -1,6 +1,6 @@
 from typing import List
 from .users import Users
-from .usage import Usage
+from .teamusage import TeamUsage
 from datetime import datetime
 
 
@@ -41,5 +41,5 @@ class Teams:
         self.format = value
 
     @usage_field.setter
-    def usage_field(self, value: List[Usage]):
+    def usage_field(self, value: List[TeamUsage]):
         self.usage = value

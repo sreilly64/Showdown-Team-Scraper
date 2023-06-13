@@ -1,7 +1,7 @@
-import sys
 import logging
 import requests
 import os
+import traceback
 from pathlib import Path
 from PIL import Image
 from selenium import webdriver
@@ -17,7 +17,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 class SpriteDownloader:
 
     base_download_location = os.environ['spriteFolderLocation']  # set 'spriteFolderLocation' in environment variables to the sprites folder of the Babiri front end
-    sprite_folder_url = "https://play.pokemonshowdown.com/sprites/dex/"
+    sprite_folder_url = "https://play.pokemonshowdown.com/sprites/gen5/"
 
     def __init__(self):
         logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
@@ -41,7 +41,7 @@ class SpriteDownloader:
             for png_link in png_download_links:
                 download_location = self.base_download_location + f"{png_link.text}"
                 path = Path(download_location)
-                if not path.is_file() and "totem" not in png_link.text and "vivillon" not in png_link.text and "furfrou" not in png_link.text:
+                if not path.is_file() and "totem" not in png_link.text and "vivillon" not in png_link.text and "furfrou" not in png_link.text and "gmax" not in png_link.text:
                     logging.info(f"{png_link.text} was not found in project")
                     sprite_data = requests.get(str(png_link.get_attribute("href"))).content
                     with open(f'{download_location}', 'wb') as handler:
@@ -55,7 +55,8 @@ class SpriteDownloader:
         except TimeoutException:
             logging.error("Timeout Exception occurred, could not find sprite links.")
         except:
-            logging.error("Unexpected error when trying to open the login page: %s", sys.exc_info()[0])
+            logging.error("Unexpected error when trying to open the login page")
+            traceback.print_exc()
 
         driver.quit()
 
