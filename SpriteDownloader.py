@@ -10,7 +10,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 
 
 #This script is for downloading missing Pokemon sprite files from Showdown for use by Babiri
@@ -22,11 +22,12 @@ class SpriteDownloader:
     def __init__(self):
         logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
         self.driver_path = "S:\Program Files\ChromeDriver\chromedriver.exe"
-        self.options = webdriver.ChromeOptions()
+        self.options = webdriver.FirefoxOptions()
         self.options.add_argument("--headless")
+        self.options.headless = True
 
     def get_missing_sprites(self):
-        driver = webdriver.Chrome(options=self.options, service=Service(ChromeDriverManager().install()))
+        driver = webdriver.Firefox(options=self.options, service=Service(GeckoDriverManager().install()))
         logging.info("Loading page...")
         driver.get(self.sprite_folder_url)
         # get all <a> where the href is the download url for each sprite

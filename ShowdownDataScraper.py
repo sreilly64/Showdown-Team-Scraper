@@ -78,6 +78,7 @@ class ShowdownDataScraper:
             #Get current player
             showdown_player_data = top_list[showdown_rank_count-1]
             logging.debug(f"Current player data: {vars(showdown_player_data)}")
+            username = showdown_player_data.username_field
             userid = showdown_player_data.userid_field
 
             # Use showdown ladder data objects to fetch recent replays and add that info to DB entities IF they have recent games
@@ -85,17 +86,17 @@ class ShowdownDataScraper:
 
             # If no recent matches, go to next user
             if len(recent_match_data) == 0:
-                logging.debug(f"No recent matches were found for {userid}.")
+                logging.debug(f"No recent matches were found for {username}.")
                 showdown_rank_count += 1
                 continue
 
             # Instantiate additional fields for User object from recent_match_data
             upload_date = time.strftime('%Y-%m-%d', time.localtime(recent_match_data[0]["uploadtime"]))
             recent_match_id = recent_match_data[0]["id"]
-            team = self.get_team_list(recent_match_id, userid)
+            team = self.get_team_list(recent_match_id, username)
             replay_url = self.replays_base_url + recent_match_id
 
-            user = Users(rank=showdown_rank_count, website_rank=website_rank_count, username=userid, team=team, replay_url=replay_url, rating=int(showdown_player_data.elo), upload_date=upload_date)
+            user = Users(rank=showdown_rank_count, website_rank=website_rank_count, username=username, team=team, replay_url=replay_url, rating=int(showdown_player_data.elo), upload_date=upload_date)
             team_entity.users_field.append(vars(user))
             logging.info(f"{format} team found, User object created and added to Teams list: {vars(user)}")
 
@@ -127,22 +128,30 @@ class ShowdownDataScraper:
                 pokemon_count_dict.update({mon: current_count + 1})
         return pokemon_count_dict
 
-    def get_team_list(self, match_id: str, userid: str):
+    def get_team_list(self, match_id: str, username: str):
         team = []
         replay_data = self.get_replay_data(match_id)
 
-        player_number = None  # either 1 or 2
-        if replay_data["p1id"] == userid:
-            player_number = "p1"
-        else:
+        player_number = "p1"
+        if replay_data["players"][1] == username:
             player_number = "p2"
+
         replay_log = replay_data["log"]
 
         pattern = re.compile(f"poke\|{player_number}\|([\\w\\s*-]+)[,|]")  # Regex for parsing Pokémon names from Showdown replay log
         for match in pattern.finditer(replay_log):
-            team.append(match.group(1).lower().replace(" ", "").replace("-*", ""))  # Format Pokémon names to match file name of sprites
+            if match.group(1) == "Urshifu-*":
+                team.append(self.get_urshifu_form(replay_log, player_number))
+            else:
+                team.append(match.group(1).lower().replace(" ", "").replace("-*", ""))  # Format Pokémon names to match file name of sprites
         logging.debug(f"Team list: {str(team)}")
         return team
+
+    def get_urshifu_form(self, replay_log: str, player_number: str) -> str:
+        pattern = re.compile(f"\|{player_number}[ab]: [\\w\\s*-]+\|(Urshifu|Urshifu-Rapid-Strike)[,|]")
+        for match in pattern.finditer(replay_log):
+            return match.group(1).lower()
+        return "urshifu-rapid-strike"  # Default to rapid strike form since it has higher usage
 
     def save_teams_to_database(self, team_entity):
         logging.info(f"Saving {team_entity.format_field} teams to database...")
